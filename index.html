@@ -1135,13 +1135,15 @@ textarea{
 
     <div class="grid">
 
-      <div class="field" style="position:relative">
+      <div class="field">
         <label>Section</label>
-        <select id="section" style="display:none">
+        <div style="position:relative">
+          <input type="text" id="sectionSearch" placeholder="Search section… (dc / m / 26)" autocomplete="off">
+          <div id="sectionDropdown" class="sec-dropdown"></div>
+        </div>
+        <select id="section" style="margin-top:8px">
           <option value="">Select Section</option>
         </select>
-        <input type="text" id="sectionSearch" placeholder="Search section… (dc / m / 26)" autocomplete="off">
-        <div id="sectionDropdown" class="sec-dropdown"></div>
       </div>
 
       <div class="field">
@@ -1862,7 +1864,10 @@ document.addEventListener("DOMContentLoaded", () => {
 function attachEvents(){
 
   document.getElementById("section")
-    .addEventListener("change", updateRate);
+    .addEventListener("change", function(){
+      syncSectionSearch(this.value);
+      updateRate();
+    });
 
   const sSearch = document.getElementById("sectionSearch");
 
