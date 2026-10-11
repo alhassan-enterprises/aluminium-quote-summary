@@ -317,6 +317,71 @@ textarea{
   color:#fff;
 }
 
+.dchip-row{
+  display:flex;
+  gap:6px;
+  flex-wrap:wrap;
+  margin-top:8px;
+}
+
+.dchip{
+  background:#fdf6e7;
+  color:#8a6d1c;
+  border:1px solid #e8d48b;
+  padding:6px 12px;
+  border-radius:14px;
+  font-size:12px;
+  font-weight:800;
+  cursor:pointer;
+}
+
+.dchip:active{
+  background:#f5e6bd;
+}
+
+.chip-edit{
+  background:none;
+  border:none;
+  cursor:pointer;
+  font-size:13px;
+  padding:0 2px;
+}
+
+.chip-edit-row{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:8px 4px;
+  border-bottom:1px solid #f1f4f8;
+  font-size:13px;
+  font-weight:700;
+}
+
+.chip-del{
+  background:#fde8e8;
+  color:#c0392b;
+  border:none;
+  border-radius:50%;
+  width:26px;
+  height:26px;
+  font-size:16px;
+  font-weight:800;
+  cursor:pointer;
+  line-height:1;
+}
+
+.chip-count{
+  margin-top:8px;
+  font-size:11px;
+  color:#98a2b3;
+  font-weight:700;
+}
+
+#addChipBtn:disabled{
+  opacity:.4;
+  cursor:default;
+}
+
 .add-btn{
   width:100%;
   border:0;
@@ -1015,6 +1080,7 @@ textarea{
   <!-- ================= PRINT-ONLY BILL HEADER ================= -->
 
   <div class="print-header" id="printHeader">
+    <img id="phLogo" style="display:none;max-height:60px;max-width:180px;float:right;margin-left:12px">
     <div class="ph-company" id="phCompany">ALUMINIUM BILL</div>
     <div class="ph-line" id="phCompanyAddr"></div>
     <div class="ph-line" id="phCompanyMobile"></div>
@@ -1204,8 +1270,9 @@ textarea{
         </div>
 
         <div class="field">
-          <label>Discount %</label>
+          <label>Discount % <button type="button" class="chip-edit" onclick="openChipsModal()" title="Edit chips">⚙</button></label>
           <input id="discount" type="number" min="0" max="100" step="0.01" value="0">
+          <div id="discountChips" class="dchip-row"></div>
         </div>
 
       </div>
@@ -1477,11 +1544,49 @@ textarea{
         <textarea id="companyAddress"></textarea>
       </div>
 
+      <div class="field">
+        <label>Company Logo (shows on PDF bill)</label>
+        <input type="file" id="companyLogoInput" accept="image/*">
+        <div style="margin-top:8px">
+          <img id="companyLogoPreview" style="max-height:70px;max-width:220px;display:none;border:1px solid #d9e0ea;border-radius:8px;background:#fff">
+        </div>
+        <button type="button" class="cancel-modal" id="removeLogoBtn" style="margin-top:8px;display:none" onclick="removeCompanyLogo()">Remove Logo</button>
+      </div>
+
     </div>
 
     <div class="modal-actions">
       <button class="cancel-modal" onclick="closeModal('companyModal')">Cancel</button>
       <button class="save-modal" onclick="saveCompany()">Save Company</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- ================= DISCOUNT CHIPS EDITOR ================= -->
+
+<div class="modal" id="discountChipsModal">
+  <div class="modal-box">
+
+    <div class="modal-head">
+      <div class="modal-title">Discount Chips</div>
+      <button class="close" onclick="closeModal('discountChipsModal')">×</button>
+    </div>
+
+    <div id="chipsEditorList"></div>
+
+    <div class="chip-count" id="chipsCount">0 / 9 chips</div>
+
+    <div class="grid" style="margin-top:10px">
+      <div class="field">
+        <label>New chip %</label>
+        <input id="newChipValue" type="number" min="0" max="100" step="0.01" placeholder="e.g. 15">
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="cancel-modal" onclick="closeModal('discountChipsModal')">Done</button>
+      <button class="save-modal" id="addChipBtn" onclick="addDiscountChip()">Add Chip</button>
     </div>
 
   </div>
@@ -1704,6 +1809,12 @@ const STORAGE_CUSTOMER = "quotation_customer";
 const STORAGE_COMPANY = "quotation_company";
 const STORAGE_DRAFT = "quotation_draft";
 const STORAGE_RATES_VER = "aluminium_rates_ver";
+const STORAGE_CHIPS = "quotation_discount_chips";
+
+/* Company logo (changeable, shown on PDF bill) */
+let companyLogoData = "";
+let companyLogoW = 0;
+let companyLogoH = 0;
 
 /* =========================================================
    DEFAULT RATES
@@ -1848,6 +1959,7 @@ document.addEventListener("DOMContentLoaded", () => {
   generateQuoteNo();
   populateSections();
   renderThicknessChips();
+  renderDiscountChips();
   attachEvents();
   loadDraft();
 
@@ -1897,6 +2009,11 @@ function attachEvents(){
         .classList.remove("open");
     }
   });
+
+  document.getElementById("companyLogoInput")
+    .addEventListener("change", function(){
+      handleLogoSelect(this);
+    });
 
   document.getElementById("thickness")
     .addEventListener("change", updateRate);
@@ -2531,7 +2648,7 @@ function renderItems(){
           onclick="editItem(${index})">Edit</button>
 
         <button class="action-btn copy-btn"
-          onclick="copyItem(${index})">Copy</button>
+          onclick="copyItem(${index})">Duplicate</button>
 
         <button class="action-btn delete-btn"
           onclick="deleteItem(${index})">Delete</button>
@@ -2863,7 +2980,11 @@ function saveCompany(){
       document.getElementById("companyMobile").value.trim(),
 
     address:
-      document.getElementById("companyAddress").value.trim()
+      document.getElementById("companyAddress").value.trim(),
+
+    logo: companyLogoData,
+    logoW: companyLogoW,
+    logoH: companyLogoH
 
   };
 
@@ -2901,6 +3022,11 @@ function loadSavedCompany(){
     document.getElementById("companyAddress").value =
       data.address || "";
 
+    companyLogoData = data.logo || "";
+    companyLogoW = data.logoW || 0;
+    companyLogoH = data.logoH || 0;
+    updateLogoPreview();
+
   }catch(e){}
 
   updateCompanyView();
@@ -2930,6 +3056,194 @@ function companyInfo(){
     mobile: document.getElementById("companyMobile").value.trim(),
     address: document.getElementById("companyAddress").value.trim()
   };
+}
+
+/* ---------- Company logo (changeable) ---------- */
+
+function updateLogoPreview(){
+
+  const p = document.getElementById("companyLogoPreview");
+  const b = document.getElementById("removeLogoBtn");
+
+  if(companyLogoData){
+    p.src = companyLogoData;
+    p.style.display = "inline-block";
+    b.style.display = "inline-block";
+  }else{
+    p.removeAttribute("src");
+    p.style.display = "none";
+    b.style.display = "none";
+  }
+
+}
+
+function removeCompanyLogo(){
+  companyLogoData = "";
+  companyLogoW = 0;
+  companyLogoH = 0;
+  document.getElementById("companyLogoInput").value = "";
+  updateLogoPreview();
+  toast("Logo removed — press Save Company");
+}
+
+function handleLogoSelect(input){
+
+  const f = input.files && input.files[0];
+  if(!f) return;
+
+  const rd = new FileReader();
+
+  rd.onload = function(){
+
+    const img = new Image();
+
+    img.onload = function(){
+
+      /* Downscale so it fits easily in localStorage */
+      const maxDim = 500;
+      let w = img.width, h = img.height;
+      const sc = Math.min(1, maxDim / Math.max(w, h));
+      w = Math.max(1, Math.round(w * sc));
+      h = Math.max(1, Math.round(h * sc));
+
+      const cv = document.createElement("canvas");
+      cv.width = w; cv.height = h;
+      const cx = cv.getContext("2d");
+      cx.fillStyle = "#ffffff";
+      cx.fillRect(0, 0, w, h);
+      cx.drawImage(img, 0, 0, w, h);
+
+      companyLogoData = cv.toDataURL("image/jpeg", 0.88);
+      companyLogoW = w;
+      companyLogoH = h;
+
+      updateLogoPreview();
+      toast("Logo selected — press Save Company");
+
+    };
+
+    img.src = rd.result;
+
+  };
+
+  rd.readAsDataURL(f);
+
+}
+
+/* ---------- Discount chips (custom, up to 9) ---------- */
+
+const DEFAULT_CHIPS = [
+  { label:"12%", value:12 },
+  { label:"25%", value:25 },
+  { label:"30%", value:30 }
+];
+
+function loadChips(){
+  try{
+    const saved = JSON.parse(localStorage.getItem(STORAGE_CHIPS) || "null");
+    if(Array.isArray(saved) && saved.length) return saved;
+  }catch(e){}
+  return JSON.parse(JSON.stringify(DEFAULT_CHIPS));
+}
+
+function saveChips(chips){
+  localStorage.setItem(STORAGE_CHIPS, JSON.stringify(chips));
+}
+
+function renderDiscountChips(){
+
+  const wrap = document.getElementById("discountChips");
+  if(!wrap) return;
+
+  const chips = loadChips();
+  wrap.innerHTML = "";
+
+  chips.forEach(c => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "dchip";
+    b.textContent = c.label;
+    b.addEventListener("click", function(){
+      document.getElementById("discount").value = c.value;
+      toast("Discount " + c.value + "%");
+    });
+    wrap.appendChild(b);
+  });
+
+}
+
+function openChipsModal(){
+  renderChipsEditor();
+  document.getElementById("discountChipsModal").classList.add("show");
+}
+
+function renderChipsEditor(){
+
+  const list = document.getElementById("chipsEditorList");
+  const chips = loadChips();
+  list.innerHTML = "";
+
+  chips.forEach((c, i) => {
+    const row = document.createElement("div");
+    row.className = "chip-edit-row";
+
+    const name = document.createElement("span");
+    name.textContent = c.label + "  (" + c.value + "%)";
+
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "chip-del";
+    del.textContent = "×";
+    del.addEventListener("click", function(){
+      const arr = loadChips();
+      arr.splice(i, 1);
+      saveChips(arr);
+      renderChipsEditor();
+      renderDiscountChips();
+    });
+
+    row.appendChild(name);
+    row.appendChild(del);
+    list.appendChild(row);
+  });
+
+  document.getElementById("chipsCount").textContent =
+    chips.length + " / 9 chips";
+
+  document.getElementById("addChipBtn").disabled = chips.length >= 9;
+
+}
+
+function addDiscountChip(){
+
+  const inp = document.getElementById("newChipValue");
+  const v = parseFloat(inp.value);
+
+  if(isNaN(v) || v < 0 || v > 100){
+    toast("Enter 0 – 100");
+    return;
+  }
+
+  const chips = loadChips();
+
+  if(chips.length >= 9){
+    toast("Max 9 chips");
+    return;
+  }
+
+  if(chips.some(c => c.value === v)){
+    toast("Already added");
+    return;
+  }
+
+  chips.push({ label: v + "%", value: v });
+  saveChips(chips);
+  inp.value = "";
+
+  renderChipsEditor();
+  renderDiscountChips();
+  toast("Chip added");
+
 }
 
 function customerInfo(){
@@ -4213,6 +4527,15 @@ function updatePrintHeader(){
   document.getElementById("phCompany").textContent =
     co.name || "ALUMINIUM BILL";
 
+  const pl = document.getElementById("phLogo");
+  if(companyLogoData){
+    pl.src = companyLogoData;
+    pl.style.display = "block";
+  }else{
+    pl.removeAttribute("src");
+    pl.style.display = "none";
+  }
+
   document.getElementById("phCompanyAddr").textContent =
     co.address || "";
 
@@ -4322,6 +4645,20 @@ function pdfHeaderBlock(doc, title){
   const cu = customerInfo();
 
   let y = 14;
+
+  /* Company logo (top-right) if set */
+  if(companyLogoData){
+    try{
+      const boxW = 30, boxH = 20;
+      let w = boxW, h = boxH;
+      if(companyLogoW > 0 && companyLogoH > 0){
+        const s = Math.min(boxW / companyLogoW, boxH / companyLogoH);
+        w = companyLogoW * s;
+        h = companyLogoH * s;
+      }
+      doc.addImage(companyLogoData, "JPEG", doc.internal.pageSize.getWidth() - 14 - w, 8, w, h);
+    }catch(e){}
+  }
 
   doc.setFont("helvetica","bold");
   doc.setFontSize(18);
