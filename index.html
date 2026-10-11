@@ -1454,6 +1454,10 @@ textarea{
         📋 Summary PDF
       </button>
 
+      <button class="action-main green" onclick="shareFullBill()">
+        📤 Share Bill PDF
+      </button>
+
       <button class="action-main gold" onclick="window.print()">
         🖨 Print / PDF
       </button>
@@ -4559,6 +4563,45 @@ function updatePrintHeader(){
    PDF DOWNLOADS (Full Bill + Material Summary)
 ========================================================= */
 
+function topBridge(name){
+  try{
+    if(window.top && window.top !== window && window.top[name]) return window.top[name];
+    if(window[name]) return window[name];
+  }catch(e){}
+  return null;
+}
+function sharePdfDoc(doc, fileName, title){
+  try{
+    const blob = doc.output("blob");
+    const fr = new FileReader();
+    fr.onloadend = function(){
+      const dataUrl = fr.result;
+      const sh = topBridge("AndroidShare");
+      if(sh && sh.shareFile){ sh.shareFile(dataUrl, fileName, "application/pdf"); return; }
+      if(navigator.share && navigator.canShare){
+        const file = new File([blob], fileName, {type:"application/pdf"});
+        if(navigator.canShare({files:[file]})){
+          navigator.share({files:[file], title: title || "Bill"}).catch(function(){});
+          return;
+        }
+      }
+      toast("Share support nahi mila");
+    };
+    fr.readAsDataURL(blob);
+  }catch(err){ toast("Share failed"); }
+}
+function downloadPdfDoc(doc, fileName, okMsg){
+  const br = topBridge("AndroidSave");
+  if(br && br.saveBlob){
+    const qno = (document.getElementById("quoteNo")||{}).value || "bill";
+    const fr = new FileReader();
+    fr.onloadend = function(){ br.saveBlob(fr.result, "application/pdf", qno); toast(okMsg); };
+    fr.readAsDataURL(doc.output("blob"));
+    return;
+  }
+  doc.save(fileName);
+  toast(okMsg);
+}
 function pdfReady(){
 
   if(window.jspdf && window.jspdf.jsPDF){
@@ -4794,7 +4837,7 @@ function pdfTotalsBlock(doc, startY, t){
 
 }
 
-function downloadFullBill(){
+function buildFullBillDoc(){
 
   if(items.length === 0){
     toast("Add at least one item");
@@ -4851,9 +4894,7 @@ function downloadFullBill(){
     const qno =
       document.getElementById("quoteNo").value || "bill";
 
-    doc.save("FullBill-" + qno + ".pdf");
-
-    toast("Full bill PDF downloaded");
+    return { doc:doc, fileName:"FullBill-" + qno + ".pdf" };
 
   }catch(err){
 
@@ -4861,9 +4902,21 @@ function downloadFullBill(){
 
   }
 
+  return null;
+
 }
 
-function downloadSummaryPDF(){
+function downloadFullBill(){
+  const r = buildFullBillDoc(); if(!r) return;
+  downloadPdfDoc(r.doc, r.fileName, "Full bill PDF downloaded");
+}
+
+function shareFullBill(){
+  const r = buildFullBillDoc(); if(!r) return;
+  sharePdfDoc(r.doc, r.fileName, "Aluminium Bill");
+}
+
+function buildSummaryDoc(){
 
   if(items.length === 0){
     toast("Add at least one item");
@@ -4923,9 +4976,7 @@ function downloadSummaryPDF(){
     const qno =
       document.getElementById("quoteNo").value || "bill";
 
-    doc.save("Summary-" + qno + ".pdf");
-
-    toast("Summary PDF downloaded");
+    return { doc:doc, fileName:"Summary-" + qno + ".pdf" };
 
   }catch(err){
 
@@ -4933,6 +4984,18 @@ function downloadSummaryPDF(){
 
   }
 
+  return null;
+
+}
+
+function downloadSummaryPDF(){
+  const r = buildSummaryDoc(); if(!r) return;
+  downloadPdfDoc(r.doc, r.fileName, "Summary PDF downloaded");
+}
+
+function shareSummaryBill(){
+  const r = buildSummaryDoc(); if(!r) return;
+  sharePdfDoc(r.doc, r.fileName, "Bill Summary");
 }
 
 /* =========================================================
