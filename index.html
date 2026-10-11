@@ -205,6 +205,32 @@ input:focus,select:focus,textarea:focus{
   box-shadow:0 0 0 2px rgba(214,168,79,.12);
 }
 
+.sec-dropdown{
+  display:none;
+  position:absolute;
+  top:100%;
+  left:0;
+  right:0;
+  background:#fff;
+  border:1px solid #d9e0ea;
+  border-radius:9px;
+  max-height:230px;
+  overflow-y:auto;
+  z-index:60;
+  box-shadow:0 8px 24px rgba(0,0,0,.12);
+  margin-top:4px;
+}
+.sec-dropdown.open{display:block;}
+.sec-opt{
+  padding:9px 12px;
+  font-size:13px;
+  border-bottom:1px solid #f1f4f8;
+  cursor:pointer;
+}
+.sec-opt:last-child{border-bottom:none;}
+.sec-opt:active,.sec-opt:hover{background:#fdf6e7;}
+.sec-opt.none{color:#98a2b3;cursor:default;}
+
 textarea{
   min-height:70px;
   resize:vertical;
@@ -1109,11 +1135,13 @@ textarea{
 
     <div class="grid">
 
-      <div class="field">
+      <div class="field" style="position:relative">
         <label>Section</label>
-        <select id="section">
+        <select id="section" style="display:none">
           <option value="">Select Section</option>
         </select>
+        <input type="text" id="sectionSearch" placeholder="Search section… (dc / m / 26)" autocomplete="off">
+        <div id="sectionDropdown" class="sec-dropdown"></div>
       </div>
 
       <div class="field">
@@ -1836,6 +1864,35 @@ function attachEvents(){
   document.getElementById("section")
     .addEventListener("change", updateRate);
 
+  const sSearch = document.getElementById("sectionSearch");
+
+  sSearch.addEventListener("input", function(){
+    renderSectionDropdown(this.value);
+  });
+
+  sSearch.addEventListener("focus", function(){
+    renderSectionDropdown(this.value);
+  });
+
+  sSearch.addEventListener("change", function(){
+    const v = this.value.trim().toLowerCase();
+    if(!v) return;
+    const hit = rates.find(r => r.section.toLowerCase() === v);
+    if(hit){
+      document.getElementById("section").value = hit.section;
+      this.value = hit.section;
+      updateRate();
+    }
+  });
+
+  document.addEventListener("click", function(e){
+    if(!e.target.closest("#sectionSearch") &&
+       !e.target.closest("#sectionDropdown")){
+      document.getElementById("sectionDropdown")
+        .classList.remove("open");
+    }
+  });
+
   document.getElementById("thickness")
     .addEventListener("change", updateRate);
 
@@ -1997,6 +2054,57 @@ function populateSections(){
     select.value = current;
   }
 
+}
+
+/* ---------- Searchable section dropdown ---------- */
+
+function renderSectionDropdown(q){
+
+  const dd = document.getElementById("sectionDropdown");
+  if(!dd) return;
+
+  q = (q || "").toLowerCase().trim();
+
+  const matches = rates.filter(r =>
+    r.section.toLowerCase().includes(q));
+
+  dd.innerHTML = "";
+
+  if(!matches.length){
+    const row = document.createElement("div");
+    row.className = "sec-opt none";
+    row.textContent = "No match";
+    dd.appendChild(row);
+  }else{
+    matches.forEach(r => {
+      const row = document.createElement("div");
+      row.className = "sec-opt";
+      row.textContent = r.section;
+      row.addEventListener("click", function(){
+        selectSectionFromSearch(r.section);
+      });
+      dd.appendChild(row);
+    });
+  }
+
+  dd.classList.add("open");
+
+}
+
+function selectSectionFromSearch(sec){
+
+  document.getElementById("section").value = sec;
+  const si = document.getElementById("sectionSearch");
+  si.value = sec;
+  document.getElementById("sectionDropdown").classList.remove("open");
+  updateRate();
+  si.blur();
+
+}
+
+function syncSectionSearch(val){
+  const si = document.getElementById("sectionSearch");
+  if(si) si.value = val || "";
 }
 
 function rateGroup(thickness){
@@ -2273,20 +2381,14 @@ function addItem(){
   calculateTotals();
   saveDraft();
 
-  /* Required reset */
-
-  document.getElementById("section").value = "";
+  /* Reset for next entry — section stays selected
+     so the same section can be added again without searching */
 
   document.getElementById("size").value = "";
 
   document.getElementById("qty").value = "";
 
-  document.getElementById("rate").value = "";
-
-  document.getElementById("ratePreview").textContent = "—";
-
-  document.getElementById("rateStatus").textContent =
-    "Select section & thickness";
+  updateRate();
 
   document.querySelectorAll(".chip")
     .forEach(x => x.classList.remove("active"));
@@ -2448,6 +2550,8 @@ function editItem(index){
 
   document.getElementById("section").value =
     item.section;
+
+  syncSectionSearch(item.section);
 
   document.getElementById("colour").value =
     [
@@ -3692,6 +3796,7 @@ function newQuotation(){
   document.getElementById("notes").value = "";
 
   document.getElementById("section").value = "";
+  syncSectionSearch("");
   document.getElementById("size").value = "";
   document.getElementById("qty").value = "";
   document.getElementById("rate").value = "";
